@@ -3,6 +3,9 @@ import { debounce } from "./utils";
 import bird from "./assets/yugi.png";
 import pipe from "./assets/cloud.png";
 import sky from "./assets/sky.jpg";
+import title from "./assets/title.png";
+import instruction from "./assets/instruction.png";
+import tap from "./assets/tap.png";
 
 export default class Game extends Phaser.Scene {
   bird: Phaser.Physics.Arcade.Sprite;
@@ -12,16 +15,28 @@ export default class Game extends Phaser.Scene {
   scoreText: Phaser.GameObjects.Text;
   livesText: Phaser.GameObjects.Text;
   spaceKey: Phaser.Input.Keyboard.Key;
+  click: Phaser.Input.Pointer;
+  hasStarted: boolean;
+  wobble: Phaser.Tweens.Tween;
+  title: Phaser.GameObjects.Image;
+  instruction: Phaser.GameObjects.Image;
+  tap: Phaser.GameObjects.Image;
 
   preload = () => {
     this.load.image("bird", bird);
     this.load.image("pipe", pipe);
     this.load.image("sky", sky);
+    this.load.image("title", title);
+    this.load.image("instruction", instruction);
+    this.load.image("tap", tap);
   };
 
   create = () => {
     this.cameras.main.setBackgroundColor("#71c5cf");
     this.add.image(300, 275, "sky").setScale(1.25);
+    this.title = this.add.image(200, 100, "title").setScale(0.75);
+    this.instruction = this.add.image(200, 460, "instruction").setScale(0.25);
+    this.tap = this.add.image(200, 420, "tap").setScale(0.25);
 
     this.score = 0;
     this.scoreText = this.add.text(20, 20, "0", {
@@ -34,26 +49,33 @@ export default class Game extends Phaser.Scene {
       color: "#00aa00",
     });
 
-    this.bird = this.physics.add.sprite(100, 245, "bird");
+    this.hasStarted = false;
+
+    const startX = 100;
+    const startY = 245;
+
+    this.bird = this.physics.add.sprite(startX, startY, "bird");
     this.bird.setScale(0.25);
     this.bird.setBodySize(130, 65);
     this.bird.body.y = this.bird.body.y / 2;
     this.bird.setBounce(0.3);
+    (this.bird.body as any).setAllowGravity(false);
+
+    this.wobble = this.tweens.add({
+      targets: this.bird,
+      y: { from: startY, to: startY + 20 },
+      yoyo: true,
+      loop: -1,
+    });
 
     this.spaceKey = this.input.keyboard.addKey(
       Phaser.Input.Keyboard.KeyCodes.SPACE
     );
     this.spaceKey.on("down", this.jump);
+    this.input.on("pointerdown", this.jump);
 
     this.pipes = this.physics.add.group({
       allowGravity: false,
-    });
-
-    this.time.addEvent({
-      delay: 750,
-      callback: this.addRowOfPipes,
-      callbackScope: this,
-      loop: true,
     });
 
     this.physics.add.overlap(this.bird, this.pipes, this.hitPipe, null, this);
@@ -64,12 +86,38 @@ export default class Game extends Phaser.Scene {
       this.scene.restart();
     }
 
-    if (this.bird.angle < 90) {
+    if (this.bird.angle < 90 && this.hasStarted) {
       this.bird.angle += 1;
     }
   };
 
   jump = () => {
+    if (!this.hasStarted) {
+      this.hasStarted = true;
+      (this.bird.body as any).setAllowGravity(true);
+      this.tweens.remove(this.wobble);
+
+      this.tweens.add({
+        targets: this.title,
+        alpha: { from: 1, to: 0 },
+        duration: 1250,
+        ease: "Cubic.easeIn",
+      });
+      this.tweens.add({
+        targets: [this.tap, this.instruction],
+        alpha: { from: 1, to: 0 },
+        duration: 2250,
+        ease: "Cubic.easeIn",
+      });
+
+      this.time.addEvent({
+        delay: 750,
+        callback: this.addRowOfPipes,
+        callbackScope: this,
+        loop: true,
+      });
+    }
+
     this.bird.body.velocity.y = -350;
 
     this.tweens.add({
@@ -77,7 +125,6 @@ export default class Game extends Phaser.Scene {
       angle: this.bird.angle > 30 ? this.bird.angle - 30 : 0,
       duration: 500,
     });
-    // TODO: go to -20 degree angle
   };
 
   addOnePipe = (x: number, y: number, motion = 0) => {
