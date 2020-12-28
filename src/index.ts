@@ -1,23 +1,8 @@
 import * as Phaser from "phaser";
+import { debounce } from "./utils";
 import bird from "./assets/yugi.png";
 import pipe from "./assets/cloud.png";
 import sky from "./assets/sky.jpg";
-
-function debounce(func: any, wait: any, immediate: any) {
-  var timeout: any;
-  return function () {
-    var context = this,
-      args = arguments;
-    var later = function () {
-      timeout = null;
-      if (!immediate) func.apply(context, args);
-    };
-    var callNow = immediate && !timeout;
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-    if (callNow) func.apply(context, args);
-  };
-}
 
 export default class Game extends Phaser.Scene {
   bird: Phaser.Physics.Arcade.Sprite;
