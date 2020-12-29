@@ -1,4 +1,4 @@
-export function debounce(func: any, wait: any, immediate: any) {
+export function debounce(func: () => void, wait: number, immediate: boolean) {
   var timeout: any;
   return function () {
     var context = this,

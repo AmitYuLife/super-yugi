@@ -1,15 +1,13 @@
 import * as Phaser from "phaser";
 import { debounce } from "./utils";
-import bird from "./assets/yugi.png";
-import pipe from "./assets/cloud.png";
+import player from "./assets/yugi.png";
+import cloud from "./assets/cloud.png";
 import sky from "./assets/sky.jpg";
 import title from "./assets/title.png";
-import instruction from "./assets/instruction.png";
-import tap from "./assets/tap.png";
 
 export default class Game extends Phaser.Scene {
-  bird: Phaser.Physics.Arcade.Sprite;
-  pipes: Phaser.GameObjects.Group;
+  player: Phaser.Physics.Arcade.Sprite;
+  clouds: Phaser.GameObjects.Group;
   score: number;
   lives: number;
   scoreText: Phaser.GameObjects.Text;
@@ -19,24 +17,18 @@ export default class Game extends Phaser.Scene {
   hasStarted: boolean;
   wobble: Phaser.Tweens.Tween;
   title: Phaser.GameObjects.Image;
-  instruction: Phaser.GameObjects.Image;
-  tap: Phaser.GameObjects.Image;
 
   preload = () => {
-    this.load.image("bird", bird);
-    this.load.image("pipe", pipe);
+    this.load.image("player", player);
+    this.load.image("cloud", cloud);
     this.load.image("sky", sky);
     this.load.image("title", title);
-    this.load.image("instruction", instruction);
-    this.load.image("tap", tap);
   };
 
   create = () => {
     this.cameras.main.setBackgroundColor("#71c5cf");
-    this.add.image(300, 275, "sky").setScale(1.25);
-    this.title = this.add.image(200, 100, "title").setScale(0.75);
-    this.instruction = this.add.image(200, 460, "instruction").setScale(0.25);
-    this.tap = this.add.image(200, 420, "tap").setScale(0.25);
+    this.add.image(200, 245, "sky");
+    this.title = this.add.image(200, 245, "title");
 
     this.score = 0;
     this.scoreText = this.add.text(20, 20, "0", {
@@ -54,15 +46,13 @@ export default class Game extends Phaser.Scene {
     const startX = 100;
     const startY = 245;
 
-    this.bird = this.physics.add.sprite(startX, startY, "bird");
-    this.bird.setScale(0.25);
-    this.bird.setBodySize(130, 65);
-    this.bird.body.y = this.bird.body.y / 2;
-    this.bird.setBounce(0.3);
-    (this.bird.body as any).setAllowGravity(false);
+    this.player = this.physics.add.sprite(startX, startY, "player");
+    this.player.setBodySize(32.5, 16.25);
+    this.player.setBounce(0.3);
+    (this.player.body as any).setAllowGravity(false);
 
     this.wobble = this.tweens.add({
-      targets: this.bird,
+      targets: this.player,
       y: { from: startY, to: startY + 20 },
       yoyo: true,
       loop: -1,
@@ -74,27 +64,33 @@ export default class Game extends Phaser.Scene {
     this.spaceKey.on("down", this.jump);
     this.input.on("pointerdown", this.jump);
 
-    this.pipes = this.physics.add.group({
+    this.clouds = this.physics.add.group({
       allowGravity: false,
     });
 
-    this.physics.add.overlap(this.bird, this.pipes, this.hitPipe, null, this);
+    this.physics.add.overlap(
+      this.player,
+      this.clouds,
+      this.hitCloud,
+      null,
+      this
+    );
   };
 
   update = () => {
-    if (this.bird.y < 0 || this.bird.y > 490) {
+    if (this.player.y < 0 || this.player.y > 490) {
       this.scene.restart();
     }
 
-    if (this.bird.angle < 90 && this.hasStarted) {
-      this.bird.angle += 1;
+    if (this.player.angle < 90 && this.hasStarted) {
+      this.player.angle += 1;
     }
   };
 
   jump = () => {
     if (!this.hasStarted) {
       this.hasStarted = true;
-      (this.bird.body as any).setAllowGravity(true);
+      (this.player.body as any).setAllowGravity(true);
       this.tweens.remove(this.wobble);
 
       this.tweens.add({
@@ -103,49 +99,55 @@ export default class Game extends Phaser.Scene {
         duration: 1250,
         ease: "Cubic.easeIn",
       });
-      this.tweens.add({
-        targets: [this.tap, this.instruction],
-        alpha: { from: 1, to: 0 },
-        duration: 2250,
-        ease: "Cubic.easeIn",
-      });
 
       this.time.addEvent({
         delay: 750,
-        callback: this.addRowOfPipes,
+        callback: this.addRowOfClouds,
         callbackScope: this,
         loop: true,
       });
     }
 
-    this.bird.body.velocity.y = -350;
+    this.player.body.velocity.y = -350;
 
     this.tweens.add({
-      targets: this.bird,
-      angle: this.bird.angle > 30 ? this.bird.angle - 30 : 0,
+      targets: this.player,
+      angle: this.player.angle > 30 ? this.player.angle - 30 : 0,
       duration: 500,
     });
   };
 
-  addOnePipe = (x: number, y: number, motion = 0) => {
-    const pipe = this.add.sprite(x, y, "pipe") as Phaser.Physics.Arcade.Sprite;
-    this.pipes.add(pipe);
-    pipe.body.velocity.x = -200;
-    pipe.body.setCircle(18, 12, 12);
+  addOneCloud = (x: number, y: number, motion = 0) => {
+    const cloud = this.add.sprite(
+      x,
+      y,
+      "cloud"
+    ) as Phaser.Physics.Arcade.Sprite;
+    this.clouds.add(cloud);
+    cloud.body.velocity.x = -200;
+    cloud.body.setCircle(18, 12, 12);
 
     if (motion) {
       this.tweens.add({
-        targets: pipe,
+        targets: cloud,
         loop: true,
-        y: pipe.body.position.y + motion,
+        y: cloud.body.position.y + motion,
         yoyo: true,
       });
     }
 
-    // TODO: Automatically kill the pipe when it's no longer visible
+    // after 3 seconds, destroy clouds
+    this.time.addEvent({
+      delay: 3000,
+      callback: () => {
+        this.clouds.remove(cloud, true);
+      },
+      callbackScope: this,
+      loop: false,
+    });
   };
 
-  addRowOfPipes = () => {
+  addRowOfClouds = () => {
     this.score += 1;
     this.scoreText.setText(String(this.score));
 
@@ -171,12 +173,12 @@ export default class Game extends Phaser.Scene {
 
     for (let i = 0; i < 8; i += 1) {
       if (i != hole && i != hole + 1 && i != hole + 2) {
-        this.addOnePipe(500, i * 60 + 40, motion);
+        this.addOneCloud(500, i * 60 + 40, motion);
       }
     }
   };
 
-  hitPipe = debounce(
+  hitCloud = debounce(
     () => {
       this.lives -= 1;
       this.livesText.setText(String(this.lives));
@@ -185,7 +187,7 @@ export default class Game extends Phaser.Scene {
         this.scene.restart();
       } else {
         this.tweens.add({
-          targets: this.bird,
+          targets: this.player,
           alpha: { from: 0, to: 1 },
           duration: 250,
           loop: 3,
