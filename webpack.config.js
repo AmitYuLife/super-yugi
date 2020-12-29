@@ -17,9 +17,10 @@ module.exports = {
     minimizer: [
       new UglifyJsPlugin({
         uglifyOptions: {
+          cache: true,
           compress: {},
           mangle: {
-            properties: true,
+            // properties: true,
             toplevel: true,
           },
         },
