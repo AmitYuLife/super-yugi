@@ -20,7 +20,6 @@ module.exports = {
           cache: true,
           compress: {},
           mangle: {
-            // properties: true,
             toplevel: true,
           },
         },
@@ -59,7 +58,6 @@ module.exports = {
     filename: "[name].[fullhash:8].js",
     chunkFilename: "[id].[fullhash:8].js",
   },
-  mode: "production",
   module: {
     rules: [
       {

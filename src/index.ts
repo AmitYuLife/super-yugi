@@ -5,6 +5,30 @@ import cloud from "./assets/cloud.png";
 import sky from "./assets/sky.jpg";
 import title from "./assets/title.png";
 
+export class Menu extends Phaser.Scene {
+  escKey: Phaser.Input.Keyboard.Key;
+  pKey: Phaser.Input.Keyboard.Key;
+
+  preload = () => {};
+  create = () => {
+    console.log("launched");
+
+    this.escKey = this.input.keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.ESC
+    );
+    this.pKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+
+    this.escKey.on("down", this.resumeGame);
+    this.pKey.on("down", this.resumeGame);
+  };
+
+  resumeGame = () => {
+    this.scene.stop("menu");
+    this.scene.resume("game");
+  };
+
+  update = () => {};
+}
 export default class Game extends Phaser.Scene {
   player: Phaser.Physics.Arcade.Sprite;
   clouds: Phaser.GameObjects.Group;
@@ -12,8 +36,16 @@ export default class Game extends Phaser.Scene {
   lives: number;
   scoreText: Phaser.GameObjects.Text;
   livesText: Phaser.GameObjects.Text;
+
   spaceKey: Phaser.Input.Keyboard.Key;
+  upKey: Phaser.Input.Keyboard.Key;
+  wKey: Phaser.Input.Keyboard.Key;
+  enterKey: Phaser.Input.Keyboard.Key;
+  escKey: Phaser.Input.Keyboard.Key;
+  pKey: Phaser.Input.Keyboard.Key;
+
   click: Phaser.Input.Pointer;
+
   hasStarted: boolean;
   wobble: Phaser.Tweens.Tween;
   title: Phaser.GameObjects.Image;
@@ -61,7 +93,25 @@ export default class Game extends Phaser.Scene {
     this.spaceKey = this.input.keyboard.addKey(
       Phaser.Input.Keyboard.KeyCodes.SPACE
     );
+    this.upKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
+    this.wKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    this.enterKey = this.input.keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.ENTER
+    );
+
+    this.escKey = this.input.keyboard.addKey(
+      Phaser.Input.Keyboard.KeyCodes.ESC
+    );
+    this.pKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+
     this.spaceKey.on("down", this.jump);
+    this.upKey.on("down", this.jump);
+    this.wKey.on("down", this.jump);
+    this.enterKey.on("down", this.jump);
+
+    this.escKey.on("down", this.pauseGame);
+    this.pKey.on("down", this.pauseGame);
+
     this.input.on("pointerdown", this.jump);
 
     this.clouds = this.physics.add.group({
@@ -85,6 +135,11 @@ export default class Game extends Phaser.Scene {
     if (this.player.angle < 90 && this.hasStarted) {
       this.player.angle += 1;
     }
+  };
+
+  pauseGame = () => {
+    this.scene.pause();
+    this.scene.launch("menu");
   };
 
   jump = () => {
@@ -210,5 +265,5 @@ new Phaser.Game({
       // debug: true,
     },
   },
-  scene: Game,
+  scene: [new Game({ key: "game" }), new Menu({ key: "menu" })],
 });

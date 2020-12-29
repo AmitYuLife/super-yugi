@@ -4,11 +4,12 @@
   "license": "UNLICENSED",
   "private": "true",
   "scripts": {
-    "build": "webpack",
-    "start": "webpack serve --open 'Google Chrome' --port 9001",
+    "build": "webpack --mode=production",
+    "serve": "webpack serve --open 'Google Chrome' --port 9002 --mode=production",
+    "start": "webpack serve --open 'Google Chrome' --port 9001 --mode=development",
     "dev": "yarn start",
     "develop": "yarn start",
-    "watch": "webpack --watch --progress"
+    "watch": "webpack --mode=development --watch --progress"
   },
   "dependencies": {
     "phaser": "^3.50.1"
