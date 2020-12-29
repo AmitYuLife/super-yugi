@@ -1,6 +1,7 @@
 const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const { CleanWebpackPlugin } = require("clean-webpack-plugin");
+const UglifyJsPlugin = require("uglifyjs-webpack-plugin");
 
 module.exports = {
   entry: {
@@ -13,6 +14,24 @@ module.exports = {
     }),
   ],
   optimization: {
+    minimizer: [
+      new UglifyJsPlugin({
+        uglifyOptions: {
+          compress: {},
+          mangle: {
+            properties: true,
+            toplevel: true,
+          },
+        },
+        chunkFilter: (chunk) => {
+          // Exclude uglification for the `vendor` chunk
+          if (chunk.name.startsWith("npm.")) {
+            return false;
+          }
+          return true;
+        },
+      }),
+    ],
     runtimeChunk: "single",
     splitChunks: {
       chunks: "all",
