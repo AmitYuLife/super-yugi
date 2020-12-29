@@ -5,6 +5,40 @@ import cloud from "./assets/cloud.png";
 import sky from "./assets/sky.jpg";
 import title from "./assets/title.png";
 
+export class Score extends Phaser.Scene {
+  score: number;
+
+  init = (data: { score: number }) => {
+    this.score = data.score;
+  };
+
+  preload = () => {};
+  create = () => {
+    const text = this.add.text(120, 340, `Score: ${this.score}`, {
+      font: "34px Monospace",
+      color: "#000",
+      align: "center",
+    });
+
+    this.tweens.add({
+      targets: text,
+      alpha: { from: 1, to: 0 },
+      duration: 2000,
+    });
+
+    this.time.addEvent({
+      delay: 2000,
+      callback: () => this.scene.stop("score"),
+    });
+  };
+
+  stop = () => {
+    this.scene.stop("score");
+  };
+
+  update = () => {};
+}
+
 export class Menu extends Phaser.Scene {
   escKey: Phaser.Input.Keyboard.Key;
   pKey: Phaser.Input.Keyboard.Key;
@@ -129,6 +163,9 @@ export default class Game extends Phaser.Scene {
 
   update = () => {
     if (this.player.y < 0 || this.player.y > 490) {
+      this.scene.launch("score", {
+        score: this.score,
+      });
       this.scene.restart();
     }
 
@@ -239,6 +276,9 @@ export default class Game extends Phaser.Scene {
       this.livesText.setText(String(this.lives));
 
       if (this.lives === 0) {
+        this.scene.launch("score", {
+          score: this.score,
+        });
         this.scene.restart();
       } else {
         this.tweens.add({
@@ -265,5 +305,9 @@ new Phaser.Game({
       // debug: true,
     },
   },
-  scene: [new Game({ key: "game" }), new Menu({ key: "menu" })],
+  scene: [
+    new Game({ key: "game" }),
+    new Menu({ key: "menu" }),
+    new Score({ key: "score" }),
+  ],
 });
