@@ -23,13 +23,6 @@ module.exports = {
             toplevel: true,
           },
         },
-        chunkFilter: (chunk) => {
-          // Exclude uglification for the `vendor` chunk
-          if (chunk.name.startsWith("npm.")) {
-            return false;
-          }
-          return true;
-        },
       }),
     ],
     runtimeChunk: "single",
