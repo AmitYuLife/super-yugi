@@ -23,12 +23,12 @@ export class Score extends Phaser.Scene {
     this.tweens.add({
       targets: text,
       alpha: { from: 1, to: 0 },
-      duration: 2000,
-      delay: 1000,
+      duration: 3000,
+      delay: 2000,
     });
 
     this.time.addEvent({
-      delay: 3000,
+      delay: 5000,
       callback: () => this.scene.stop("score"),
     });
   };
