@@ -21,10 +21,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image("player", playerImg);
-    this.load.image("cloud", cloudImg);
     this.load.image("sky", skyImg);
+    this.load.image("cloud", cloudImg);
     this.load.image("title", titleImg);
+    this.load.image("player", playerImg);
   }
 
   create() {
