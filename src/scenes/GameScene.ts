@@ -135,7 +135,11 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private addOneCloud(x: number, y: number, motion = 0) {
-    const cloud = this.add.sprite(x, y, "cloud") as Phaser.Physics.Arcade.Sprite;
+    const cloud = this.add.sprite(
+      x,
+      y,
+      "cloud",
+    ) as Phaser.Physics.Arcade.Sprite;
     this.clouds.add(cloud);
     cloud.body!.velocity.x = -200;
     (cloud.body as Phaser.Physics.Arcade.Body).setCircle(18, 12, 12);
@@ -166,14 +170,8 @@ export default class GameScene extends Phaser.Scene {
 
     const hole = Math.floor(Math.random() * 6);
 
-    let motion = 0;
-    if (this.score % 60 <= 20) {
-      motion = 0;
-    } else if (this.score % 60 <= 40) {
-      motion = 100;
-    } else {
-      motion = 200;
-    }
+    const motion =
+      this.score % 60 <= 20 ? 0 : this.score % 60 <= 40 ? 100 : 200;
 
     for (let i = 0; i < 8; i += 1) {
       if (i !== hole && i !== hole + 1 && i !== hole + 2) {

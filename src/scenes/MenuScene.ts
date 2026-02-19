@@ -9,9 +9,7 @@ export default class MenuScene extends Phaser.Scene {
     const escKey = this.input.keyboard!.addKey(
       Phaser.Input.Keyboard.KeyCodes.ESC,
     );
-    const pKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.P,
-    );
+    const pKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P);
 
     escKey.on("down", this.resumeGame, this);
     pKey.on("down", this.resumeGame, this);
