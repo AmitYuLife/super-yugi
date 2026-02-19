@@ -1,15 +1,14 @@
 export function debounce(func: () => void, wait: number, immediate: boolean) {
-  var timeout: any;
-  return function () {
-    var context = this,
-      args = arguments;
-    var later = function () {
+  let timeout: ReturnType<typeof setTimeout> | null;
+  return function (this: unknown, ...args: unknown[]) {
+    const context = this;
+    const later = function () {
       timeout = null;
-      if (!immediate) func.apply(context, args);
+      if (!immediate) func.apply(context, args as []);
     };
-    var callNow = immediate && !timeout;
-    clearTimeout(timeout);
+    const callNow = immediate && !timeout;
+    if (timeout) clearTimeout(timeout);
     timeout = setTimeout(later, wait);
-    if (callNow) func.apply(context, args);
+    if (callNow) func.apply(context, args as []);
   };
 }

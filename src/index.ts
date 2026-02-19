@@ -6,7 +6,7 @@ import sky from "./assets/sky.jpg";
 import title from "./assets/title.png";
 
 export class Score extends Phaser.Scene {
-  score: number;
+  score!: number;
 
   init = (data: { score: number }) => {
     this.score = data.score;
@@ -41,17 +41,17 @@ export class Score extends Phaser.Scene {
 }
 
 export class Menu extends Phaser.Scene {
-  escKey: Phaser.Input.Keyboard.Key;
-  pKey: Phaser.Input.Keyboard.Key;
+  escKey!: Phaser.Input.Keyboard.Key;
+  pKey!: Phaser.Input.Keyboard.Key;
 
   preload = () => {};
   create = () => {
     console.log("launched");
 
-    this.escKey = this.input.keyboard.addKey(
+    this.escKey = this.input.keyboard!.addKey(
       Phaser.Input.Keyboard.KeyCodes.ESC
     );
-    this.pKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+    this.pKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P);
 
     this.escKey.on("down", this.resumeGame);
     this.pKey.on("down", this.resumeGame);
@@ -65,25 +65,25 @@ export class Menu extends Phaser.Scene {
   update = () => {};
 }
 export default class Game extends Phaser.Scene {
-  player: Phaser.Physics.Arcade.Sprite;
-  clouds: Phaser.GameObjects.Group;
-  score: number;
-  lives: number;
-  scoreText: Phaser.GameObjects.Text;
-  livesText: Phaser.GameObjects.Text;
+  player!: Phaser.Physics.Arcade.Sprite;
+  clouds!: Phaser.GameObjects.Group;
+  score!: number;
+  lives!: number;
+  scoreText!: Phaser.GameObjects.Text;
+  livesText!: Phaser.GameObjects.Text;
 
-  spaceKey: Phaser.Input.Keyboard.Key;
-  upKey: Phaser.Input.Keyboard.Key;
-  wKey: Phaser.Input.Keyboard.Key;
-  enterKey: Phaser.Input.Keyboard.Key;
-  escKey: Phaser.Input.Keyboard.Key;
-  pKey: Phaser.Input.Keyboard.Key;
+  spaceKey!: Phaser.Input.Keyboard.Key;
+  upKey!: Phaser.Input.Keyboard.Key;
+  wKey!: Phaser.Input.Keyboard.Key;
+  enterKey!: Phaser.Input.Keyboard.Key;
+  escKey!: Phaser.Input.Keyboard.Key;
+  pKey!: Phaser.Input.Keyboard.Key;
 
-  click: Phaser.Input.Pointer;
+  click!: Phaser.Input.Pointer;
 
-  hasStarted: boolean;
-  wobble: Phaser.Tweens.Tween;
-  title: Phaser.GameObjects.Image;
+  hasStarted!: boolean;
+  wobble!: Phaser.Tweens.Tween;
+  title!: Phaser.GameObjects.Image;
 
   preload = () => {
     this.load.image("player", player);
@@ -125,19 +125,19 @@ export default class Game extends Phaser.Scene {
       loop: -1,
     });
 
-    this.spaceKey = this.input.keyboard.addKey(
+    this.spaceKey = this.input.keyboard!.addKey(
       Phaser.Input.Keyboard.KeyCodes.SPACE
     );
-    this.upKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
-    this.wKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-    this.enterKey = this.input.keyboard.addKey(
+    this.upKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
+    this.wKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    this.enterKey = this.input.keyboard!.addKey(
       Phaser.Input.Keyboard.KeyCodes.ENTER
     );
 
-    this.escKey = this.input.keyboard.addKey(
+    this.escKey = this.input.keyboard!.addKey(
       Phaser.Input.Keyboard.KeyCodes.ESC
     );
-    this.pKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+    this.pKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P);
 
     this.spaceKey.on("down", this.jump);
     this.upKey.on("down", this.jump);
@@ -157,7 +157,7 @@ export default class Game extends Phaser.Scene {
       this.player,
       this.clouds,
       this.hitCloud,
-      null,
+      undefined,
       this
     );
   };
@@ -201,7 +201,7 @@ export default class Game extends Phaser.Scene {
       });
     }
 
-    this.player.body.velocity.y = -350;
+    this.player.body!.velocity.y = -350;
 
     this.tweens.add({
       targets: this.player,
@@ -217,14 +217,14 @@ export default class Game extends Phaser.Scene {
       "cloud"
     ) as Phaser.Physics.Arcade.Sprite;
     this.clouds.add(cloud);
-    cloud.body.velocity.x = -200;
-    cloud.body.setCircle(18, 12, 12);
+    cloud.body!.velocity.x = -200;
+    (cloud.body as Phaser.Physics.Arcade.Body).setCircle(18, 12, 12);
 
     if (motion) {
       this.tweens.add({
         targets: cloud,
-        loop: true,
-        y: cloud.body.position.y + motion,
+        loop: -1,
+        y: cloud.body!.position.y + motion,
         yoyo: true,
       });
     }
@@ -254,7 +254,7 @@ export default class Game extends Phaser.Scene {
 
     const hole = Math.floor(Math.random() * 6);
 
-    let motion: number;
+    let motion = 0;
 
     if (this.score % 60 <= 20) {
       motion = 0;
@@ -302,7 +302,7 @@ new Phaser.Game({
   physics: {
     default: "arcade",
     arcade: {
-      gravity: { y: 1000 },
+      gravity: { x: 0, y: 1000 },
       // debug: true,
     },
   },
