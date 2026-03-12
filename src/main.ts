@@ -5,12 +5,16 @@ import ScoreScene from "./scenes/ScoreScene";
 
 new Phaser.Game({
   type: Phaser.AUTO,
-  width: 400,
-  height: 490,
+  width: window.innerWidth,
+  height: window.innerHeight,
+  scale: {
+    mode: Phaser.Scale.RESIZE,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+  },
   physics: {
     default: "arcade",
     arcade: {
-      gravity: { x: 0, y: 1000 },
+      gravity: { x: 0, y: 0 },
     },
   },
   scene: [GameScene, MenuScene, ScoreScene],
