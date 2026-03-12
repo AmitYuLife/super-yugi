@@ -1,27 +1,44 @@
 import Phaser from "phaser";
+import * as THREE from "three";
+import { FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
+import { TextGeometry } from "three/examples/jsm/geometries/TextGeometry.js";
+import helvetikerBold from "three/examples/fonts/helvetiker_bold.typeface.json";
 import playerImg from "../assets/yugi.png";
 import burgersImg from "../assets/burgers.png";
 import skyImg from "../assets/sky.jpg";
+import cowImg from "../assets/cow.png";
+import mooSfx from "../assets/moo.mp3";
+import titleImg from "../assets/title.png";
 
 export default class GameScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private clouds!: Phaser.GameObjects.Group;
   private spawnTimer?: Phaser.Time.TimerEvent;
   private sky!: Phaser.GameObjects.TileSprite;
-  private titleText!: Phaser.GameObjects.Text;
-  private titleShadow!: Phaser.GameObjects.Text;
-  private subtitleText!: Phaser.GameObjects.Text;
-  private titleTween?: Phaser.Tweens.Tween;
+  private titleText!: Phaser.GameObjects.Image;
+  private taglineText!: Phaser.GameObjects.Text;
+  private idleHoverTween?: Phaser.Tweens.Tween;
   private startButton!: Phaser.GameObjects.Container;
+  private hitboxDebugHint?: Phaser.GameObjects.Text;
+  private hitboxDebugKey?: Phaser.Input.Keyboard.Key;
+  private isHitboxDebugEnabled = false;
   private burgerFrameNames: (string | number)[] = [];
   private score = 0;
   private scoreText!: Phaser.GameObjects.Text;
   private hasStarted = false;
   private isInvulnerable = false;
   private isGameOver = false;
+  private hasQueuedRestart = false;
   private hasUnlockedAudio = false;
+  private gameOverBackdrop?: Phaser.GameObjects.Rectangle;
+  private gameOverOverlay?: Phaser.GameObjects.Container;
+  private cowSprite?: Phaser.GameObjects.Image;
+  private bloodEmitter?: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly flapVelocity = -500;
   private readonly maxFallSpeed = 820;
+  private readonly cloudScaleFactor = 1.12;
+  private readonly titleTextureKey = "title-3d";
+  private readonly hitboxMarginRatio = 0.03;
 
   constructor() {
     super({ key: "game" });
@@ -31,6 +48,9 @@ export default class GameScene extends Phaser.Scene {
     this.load.image("sky", skyImg);
     this.load.image("burger", burgersImg);
     this.load.image("player", playerImg);
+    this.load.image("cow", cowImg);
+    this.load.image("title", titleImg);
+    this.load.audio("moo", mooSfx);
   }
 
   create() {
@@ -50,6 +70,7 @@ export default class GameScene extends Phaser.Scene {
     this.hasStarted = false;
     this.isInvulnerable = false;
     this.isGameOver = false;
+    this.hasQueuedRestart = false;
     this.hasUnlockedAudio = false;
 
     const { width, height } = this.scale;
@@ -65,6 +86,7 @@ export default class GameScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     (this.player.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
     this.player.setCollideWorldBounds(false);
+    this.startIdleHover();
 
     const keyboard = this.input.keyboard!;
     const jumpKeys = [
@@ -80,9 +102,11 @@ export default class GameScene extends Phaser.Scene {
       keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P),
     ];
     pauseKeys.forEach((key) => key.on("down", this.pauseGame, this));
+    this.hitboxDebugKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H);
+    this.hitboxDebugKey.on("down", this.toggleHitboxDebug, this);
 
     this.input.on("pointerdown", () => {
-      if (this.hasStarted) {
+      if (this.hasStarted && !this.isGameOver) {
         this.jump();
       }
     });
@@ -102,6 +126,16 @@ export default class GameScene extends Phaser.Scene {
     );
 
     this.createMenuOverlay();
+    this.hitboxDebugHint = this.add
+      .text(width - 20, height - 18, "H: Hitboxes OFF", {
+        font: "700 18px Poppins",
+        color: "#ffffff",
+        stroke: "#1f2d56",
+        strokeThickness: 5,
+      })
+      .setOrigin(1, 1)
+      .setDepth(40)
+      .setAlpha(0.86);
     this.handleResize({ width, height } as Phaser.Structs.Size);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
   }
@@ -113,7 +147,7 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (this.hasStarted) {
+    if (!this.isGameOver) {
       this.sky.tilePositionX += delta * this.getParallaxSpeed();
     }
 
@@ -147,20 +181,15 @@ export default class GameScene extends Phaser.Scene {
     this.cameras.main.setViewport(0, 0, width, height);
 
     if (this.sky) {
-      this.sky.setPosition(width / 2, height / 2);
-      this.sky.setSize(width, height);
+      this.updateSkySizing(width, height);
     }
 
     if (this.titleText) {
-      this.titleText.setPosition(width / 2, height * 0.2);
+      this.layoutMenuTitle(width, height);
     }
 
-    if (this.titleShadow) {
-      this.titleShadow.setPosition(width / 2 + 5, height * 0.2 + 6);
-    }
-
-    if (this.subtitleText) {
-      this.subtitleText.setPosition(width / 2, height * 0.3);
+    if (this.taglineText) {
+      this.taglineText.setPosition(width / 2, height * 0.765);
     }
 
     if (this.startButton) {
@@ -171,6 +200,18 @@ export default class GameScene extends Phaser.Scene {
       this.scoreText.setPosition(24, 20);
     }
 
+    if (this.hitboxDebugHint) {
+      this.hitboxDebugHint.setPosition(width - 20, height - 18);
+    }
+
+    if (this.gameOverBackdrop) {
+      this.gameOverBackdrop.setSize(width, height);
+    }
+
+    if (this.gameOverOverlay) {
+      this.gameOverOverlay.setPosition(width / 2, height / 2);
+    }
+
     if (this.player) {
       this.scaleEntities();
     }
@@ -179,7 +220,22 @@ export default class GameScene extends Phaser.Scene {
   private shutdown() {
     this.scale.off("resize", this.handleResize, this);
     this.spawnTimer?.remove(false);
-    this.titleTween?.stop();
+    this.idleHoverTween?.stop();
+    this.input.off("pointerdown", this.restartFromGameOver, this);
+    this.input.keyboard?.off("keydown", this.restartFromGameOver, this);
+    this.hitboxDebugKey?.off("down", this.toggleHitboxDebug, this);
+    this.hitboxDebugKey = undefined;
+    this.gameOverOverlay?.destroy();
+    this.gameOverBackdrop?.destroy();
+    this.hitboxDebugHint?.destroy();
+    this.hitboxDebugHint = undefined;
+    this.setHitboxDebug(false);
+    this.gameOverOverlay = undefined;
+    this.gameOverBackdrop = undefined;
+    this.cowSprite?.destroy();
+    this.cowSprite = undefined;
+    this.bloodEmitter?.destroy();
+    this.bloodEmitter = undefined;
   }
 
   private scaleEntities() {
@@ -189,61 +245,76 @@ export default class GameScene extends Phaser.Scene {
     this.player.setScale(playerScale);
 
     const playerBody = this.player.body as Phaser.Physics.Arcade.Body;
-    playerBody.setSize(
-      this.player.displayWidth * 0.8,
-      this.player.displayHeight * 0.68,
-      true,
-    );
+    this.updatePlayerHitbox(playerBody);
 
     const burgerFrame =
       this.textures.getFrame("burger", this.burgerFrameNames[0]) ??
       this.textures.getFrame("burger", "__BASE");
     const burgerHeight = burgerFrame?.height ?? 128;
-    const cloudScale = (targetPlayerHeight * 1.3) / burgerHeight;
+    const cloudScale = (targetPlayerHeight * this.cloudScaleFactor) / burgerHeight;
     this.clouds?.children.each((child) => {
       const cloud = child as Phaser.Physics.Arcade.Sprite;
       cloud.setScale(cloudScale);
-      const radius = Math.min(cloud.displayWidth, cloud.displayHeight) * 0.44;
-      (cloud.body as Phaser.Physics.Arcade.Body).setCircle(
-        radius,
-        cloud.displayWidth * 0.5 - radius,
-        cloud.displayHeight * 0.5 - radius,
-      );
+      this.updateBurgerHitbox(cloud);
       return true;
     });
   }
 
+  private updatePlayerHitbox(playerBody: Phaser.Physics.Arcade.Body) {
+    // Tiny inset for forgiving edge contacts.
+    const width = this.player.width * (1 - this.hitboxMarginRatio * 2);
+    const height = this.player.height * (1 - this.hitboxMarginRatio * 2);
+    const offsetX = this.player.width * this.hitboxMarginRatio;
+    const offsetY = this.player.height * this.hitboxMarginRatio;
+    playerBody.setSize(width, height, false);
+    playerBody.setOffset(offsetX, offsetY);
+  }
+
+  private updateBurgerHitbox(cloud: Phaser.Physics.Arcade.Sprite) {
+    const body = cloud.body as Phaser.Physics.Arcade.Body;
+    // Square with tiny inset margin for fair collisions.
+    const baseSide = Math.max(cloud.width, cloud.height);
+    const side = baseSide * (1 - this.hitboxMarginRatio * 2);
+    const offsetX = (cloud.width - side) * 0.5;
+    const offsetY = (cloud.height - side) * 0.5;
+    body.setSize(side, side, false);
+    body.setOffset(offsetX, offsetY);
+  }
+
+  private toggleHitboxDebug() {
+    this.setHitboxDebug(!this.isHitboxDebugEnabled);
+  }
+
+  private setHitboxDebug(enabled: boolean) {
+    this.isHitboxDebugEnabled = enabled;
+    const world = this.physics.world;
+    if (enabled) {
+      if (!world.debugGraphic) {
+        world.createDebugGraphic();
+      }
+      world.drawDebug = true;
+      world.debugGraphic?.setVisible(true).setDepth(999);
+    } else {
+      world.drawDebug = false;
+      world.debugGraphic?.clear();
+      world.debugGraphic?.setVisible(false);
+    }
+
+    this.hitboxDebugHint?.setText(`H: Hitboxes ${enabled ? "ON" : "OFF"}`);
+    this.hitboxDebugHint?.setColor(enabled ? "#7dffba" : "#ffffff");
+  }
+
   private createMenuOverlay() {
     const { width, height } = this.scale;
-
-    this.titleShadow = this.add
-      .text(width / 2 + 5, height * 0.2 + 6, "SUPER YUGI 2!", {
-        font: "900 84px Poppins",
-        color: "#1b2745",
-      })
-      .setOrigin(0.5)
-      .setDepth(9);
-
     this.titleText = this.add
-      .text(width / 2, height * 0.2, "SUPER YUGI 2!", {
-        font: "900 84px Poppins",
-        color: "#ffe680",
-        stroke: "#ff4f7b",
-        strokeThickness: 10,
-        shadow: {
-          offsetX: 0,
-          offsetY: 0,
-          color: "#ffffff",
-          blur: 10,
-          fill: true,
-          stroke: false,
-        },
-      })
+      .image(width / 2, height * 0.24, "title")
       .setOrigin(0.5)
       .setDepth(10);
 
-    this.subtitleText = this.add
-      .text(width / 2, height * 0.3, "Rocket through the cloud maze!", {
+    this.layoutMenuTitle(width, height);
+
+    this.taglineText = this.add
+      .text(width / 2, height * 0.765, "The steaks have never been higher", {
         font: "700 28px Poppins",
         color: "#ffffff",
         stroke: "#24335a",
@@ -252,19 +323,8 @@ export default class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(10);
 
-    this.titleTween = this.tweens.add({
-      targets: [this.titleText, this.titleShadow],
-      y: "-=8",
-      scale: { from: 1, to: 1.04 },
-      angle: { from: -1.5, to: 1.5 },
-      yoyo: true,
-      repeat: -1,
-      duration: 900,
-      ease: "Sine.easeInOut",
-    });
-
     const buttonBg = this.add
-      .rectangle(0, 0, 460, 88, 0x1f8f41)
+      .rectangle(0, 0, 460, 88, 0xe30d76)
       .setStrokeStyle(5, 0xffffff);
     const buttonHitArea = this.add
       .rectangle(0, 0, 460, 88, 0x000000, 0.001)
@@ -282,13 +342,118 @@ export default class GameScene extends Phaser.Scene {
       buttonLabel,
     ]);
     this.startButton.setDepth(10);
-
-    buttonHitArea.on("pointerover", () => this.startButton.setScale(1.08));
-    buttonHitArea.on("pointerout", () => this.startButton.setScale(1));
     buttonHitArea.on("pointerdown", () => {
       this.startGame();
       this.jump();
     });
+  }
+
+  private layoutMenuTitle(width: number, height: number) {
+    const maxWidth = width * 0.94;
+    const maxHeight = height * 0.42;
+    const textureWidth = this.titleText.width || 1;
+    const textureHeight = this.titleText.height || 1;
+    const scale = Math.min(maxWidth / textureWidth, maxHeight / textureHeight);
+
+    this.titleText.setScale(scale);
+    this.titleText.setPosition(width / 2, height * 0.25);
+  }
+
+  private create3DTitleTexture() {
+    let renderer: THREE.WebGLRenderer | undefined;
+    let titleGeometry: TextGeometry | undefined;
+    const titleMaterials: THREE.MeshStandardMaterial[] = [];
+
+    try {
+      if (this.textures.exists(this.titleTextureKey)) {
+        this.textures.remove(this.titleTextureKey);
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 1700;
+      canvas.height = 560;
+
+      renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        alpha: true,
+      });
+      renderer.setSize(canvas.width, canvas.height, false);
+      renderer.setClearColor(0x000000, 0);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(
+        32,
+        canvas.width / canvas.height,
+        0.1,
+        100,
+      );
+      camera.position.set(0, 2.2, 22);
+      camera.lookAt(0, 0.6, 0);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      keyLight.position.set(7, 10, 18);
+      scene.add(keyLight);
+
+      const fillLight = new THREE.DirectionalLight(0xffb6a0, 0.35);
+      fillLight.position.set(-10, 2, 10);
+      scene.add(fillLight);
+
+      const font = new FontLoader().parse(helvetikerBold);
+      titleGeometry = new TextGeometry("SUPER YUGI 2!", {
+        font,
+        size: 3.2,
+        depth: 1.25,
+        curveSegments: 12,
+        bevelEnabled: true,
+        bevelThickness: 0.12,
+        bevelSize: 0.1,
+        bevelOffset: 0,
+        bevelSegments: 6,
+      });
+
+      const positions = titleGeometry.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < positions.count; i += 1) {
+        const x = positions.getX(i);
+        const y = positions.getY(i);
+        const z = positions.getZ(i);
+        const arcLift = -0.028 * x * x + 1.35;
+        positions.setY(i, y + arcLift);
+        positions.setZ(i, z + Math.abs(x) * 0.18);
+      }
+      positions.needsUpdate = true;
+      titleGeometry.computeVertexNormals();
+      titleGeometry.center();
+
+      titleMaterials.push(
+        new THREE.MeshStandardMaterial({
+          color: 0xff1f1f,
+          roughness: 0.45,
+          metalness: 0.12,
+        }),
+        new THREE.MeshStandardMaterial({
+          color: 0x940909,
+          roughness: 0.72,
+          metalness: 0.06,
+        }),
+      );
+
+      const textMesh = new THREE.Mesh(titleGeometry, titleMaterials);
+      textMesh.rotation.x = -0.02;
+      textMesh.rotation.y = -0.15;
+      scene.add(textMesh);
+
+      renderer.render(scene, camera);
+      this.textures.addCanvas(this.titleTextureKey, canvas);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      titleGeometry?.dispose();
+      titleMaterials.forEach((material) => material.dispose());
+      renderer?.dispose();
+    }
   }
 
   private pauseGame() {
@@ -297,6 +462,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private jump() {
+    if (this.isGameOver) return;
     this.unlockAudioContext();
 
     if (!this.hasStarted) {
@@ -316,23 +482,18 @@ export default class GameScene extends Phaser.Scene {
   private startGame() {
     if (this.hasStarted) return;
     this.hasStarted = true;
+    this.idleHoverTween?.stop();
+    this.idleHoverTween = undefined;
     (this.player.body as Phaser.Physics.Arcade.Body).setAllowGravity(true);
-    this.titleTween?.stop();
     this.startButton.disableInteractive();
-
-    this.tweens.add({
-      targets: [this.titleText, this.titleShadow, this.subtitleText, this.startButton],
-      alpha: { from: 1, to: 0 },
-      y: "-=20",
-      duration: 350,
-      ease: "Cubic.easeIn",
-      onComplete: () => {
-        this.titleText.destroy();
-        this.titleShadow.destroy();
-        this.subtitleText.destroy();
-        this.startButton.destroy();
-      },
-    });
+    this.titleText.destroy();
+    this.taglineText.destroy();
+    this.startButton.destroy();
+    // Null out refs so handleResize() guards don't call methods on destroyed objects
+    const self = this as unknown as Record<string, unknown>;
+    self.titleText = undefined;
+    self.taglineText = undefined;
+    self.startButton = undefined;
 
     this.addRowOfClouds();
     this.spawnTimer = this.time.addEvent({
@@ -340,6 +501,21 @@ export default class GameScene extends Phaser.Scene {
       callback: this.addRowOfClouds,
       callbackScope: this,
       loop: true,
+    });
+  }
+
+  private startIdleHover() {
+    this.idleHoverTween?.stop();
+    this.player.setVelocity(0, 0);
+    this.player.setAngle(-3);
+    this.idleHoverTween = this.tweens.add({
+      targets: this.player,
+      y: this.player.y - 18,
+      angle: 3,
+      duration: 1050,
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1,
     });
   }
 
@@ -352,16 +528,11 @@ export default class GameScene extends Phaser.Scene {
       burgerFrame,
     ) as Phaser.Physics.Arcade.Sprite;
     this.clouds.add(cloud);
-    const targetCloudHeight = this.player.displayHeight * 1.3;
+    const targetCloudHeight = this.player.displayHeight * this.cloudScaleFactor;
     const cloudScale = targetCloudHeight / cloud.height;
     cloud.setScale(cloudScale);
     cloud.body!.velocity.x = -this.getBurgerSpeed();
-    const radius = Math.min(cloud.displayWidth, cloud.displayHeight) * 0.44;
-    (cloud.body as Phaser.Physics.Arcade.Body).setCircle(
-      radius,
-      cloud.displayWidth * 0.5 - radius,
-      cloud.displayHeight * 0.5 - radius,
-    );
+    this.updateBurgerHitbox(cloud);
     cloud.setData("hitAnimating", false);
 
     if (motion) {
@@ -417,53 +588,134 @@ export default class GameScene extends Phaser.Scene {
       | Phaser.Tilemaps.Tile,
   ) {
     if (this.isInvulnerable || this.isGameOver) return;
-
     if (!(cloud instanceof Phaser.GameObjects.GameObject)) return;
 
     const cloudSprite = cloud as Phaser.Physics.Arcade.Sprite;
-    if (!cloudSprite.getData("hitAnimating")) {
-      cloudSprite.setData("hitAnimating", true);
-      this.tweens.add({
-        targets: cloudSprite,
-        scaleX: 1.25,
-        scaleY: 1.25,
-        alpha: 0.45,
-        yoyo: true,
-        duration: 120,
-        ease: "Quad.easeOut",
-        onComplete: () => cloudSprite.setData("hitAnimating", false),
-      });
-    }
-
     this.isInvulnerable = true;
+    this.cameras.main.shake(90, 0.007);
 
-    this.cameras.main.shake(180, 0.006);
-
-    this.tweens.add({
-      targets: this.player,
-      alpha: { from: 0.25, to: 1 },
-      duration: 90,
-      repeat: 8,
-    });
-
-    this.player.setVelocityX(-90);
-    this.time.delayedCall(120, () => this.player.setVelocityX(0));
-
-    this.triggerGameOver();
+    this.freezeGame();
+    this.playDeathSound();
+    this.playCowAnimation(cloudSprite);
   }
 
-  private triggerGameOver() {
+  private freezeGame() {
     if (this.isGameOver) return;
     this.isGameOver = true;
+    this.hasStarted = false;
     this.spawnTimer?.remove(false);
     this.isInvulnerable = true;
     this.player.setVelocity(0, 0);
     (this.player.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+    this.clouds.children.each((child) => {
+      const cloud = child as Phaser.Physics.Arcade.Sprite;
+      cloud.setVelocity(0, 0);
+      this.tweens.killTweensOf(cloud);
+      return true;
+    });
+  }
+
+  private triggerGameOver() {
+    if (this.isGameOver) return;
+    this.freezeGame();
     this.playDeathSound();
     const highScore = this.updateSessionHighScore();
-    this.time.delayedCall(520, () => {
-      this.scene.start("score", { score: this.score, highScore });
+    this.time.delayedCall(320, () => this.showGameOverOverlay(highScore));
+  }
+
+  private showGameOverOverlay(highScore: number) {
+    if (this.gameOverOverlay) return;
+    const { width, height } = this.scale;
+
+    this.gameOverBackdrop = this.add
+      .rectangle(0, 0, width, height, 0x0f1b2d, 0.62)
+      .setOrigin(0, 0)
+      .setDepth(30);
+
+    const panel = this.add
+      .rectangle(0, 0, Math.min(660, width * 0.9), Math.min(460, height * 0.82), 0x12233d, 0.92)
+      .setStrokeStyle(4, 0xffffff);
+    const panelHalfHeight = panel.height / 2;
+
+    const gameOverText = this.add
+      .text(0, -138, "GAME OVER", {
+        font: "900 64px Poppins",
+        color: "#ffd166",
+        stroke: "#e6527a",
+        strokeThickness: 8,
+      })
+      .setOrigin(0.5);
+
+    const scoreText = this.add
+      .text(0, -42, `Score: ${this.score}`, {
+        font: "700 44px Poppins",
+        color: "#ffffff",
+        stroke: "#223355",
+        strokeThickness: 7,
+      })
+      .setOrigin(0.5);
+
+    const highScoreText = this.add
+      .text(0, 24, `High Score: ${highScore}`, {
+        font: "700 36px Poppins",
+        color: "#7dffba",
+        stroke: "#223355",
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5);
+
+    const hintY = panelHalfHeight - 42;
+    const restartY = hintY - 90;
+
+    const restartButtonBg = this.add
+      .rectangle(0, restartY, 440, 86, 0x1f8f41)
+      .setStrokeStyle(4, 0xffffff);
+    const restartButtonHit = this.add
+      .rectangle(0, restartY, 440, 86, 0x000000, 0.001)
+      .setInteractive({ useHandCursor: true });
+    const restartLabel = this.add
+      .text(0, restartY, "Play Again", {
+        font: "900 36px Poppins",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5);
+
+    const hint = this.add
+      .text(0, hintY, "Click the button or press SPACE to play again", {
+        font: "700 22px Poppins",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5);
+    this.tweens.add({
+      targets: hint,
+      alpha: { from: 0.55, to: 1 },
+      yoyo: true,
+      repeat: -1,
+      duration: 620,
     });
+
+    this.gameOverOverlay = this.add.container(width / 2, height / 2, [
+      panel,
+      gameOverText,
+      scoreText,
+      highScoreText,
+      restartButtonBg,
+      restartButtonHit,
+      restartLabel,
+      hint,
+    ]);
+    this.gameOverOverlay.setDepth(31);
+
+    restartButtonHit.on("pointerover", () => restartButtonBg.setScale(1.05));
+    restartButtonHit.on("pointerout", () => restartButtonBg.setScale(1));
+    restartButtonHit.on("pointerdown", this.restartFromGameOver, this);
+    this.input.keyboard?.once("keydown-SPACE", this.restartFromGameOver, this);
+  }
+
+  private restartFromGameOver() {
+    if (!this.isGameOver || this.hasQueuedRestart) return;
+    this.hasQueuedRestart = true;
+    window.location.reload();
   }
 
   private playDeathSound() {
@@ -539,6 +791,194 @@ export default class GameScene extends Phaser.Scene {
 
   private getParallaxSpeed() {
     return Phaser.Math.Clamp(this.scale.width * 0.000035, 0.012, 0.045);
+  }
+
+  private updateSkySizing(width: number, height: number) {
+    this.sky.setPosition(width / 2, height / 2);
+    this.sky.setSize(width, height);
+    this.sky.tilePositionY = 0;
+
+    const skyFrame = this.textures.getFrame("sky", "__BASE");
+    if (!skyFrame) return;
+
+    // Match texture height to viewport height so scrolling repeats only on X.
+    const verticalScale = height / skyFrame.height;
+    this.sky.setTileScale(verticalScale, verticalScale);
+  }
+
+  private playCowAnimation(burgerSprite: Phaser.Physics.Arcade.Sprite) {
+    const { width, height } = this.scale;
+
+    (burgerSprite.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.tweens.killTweensOf(burgerSprite);
+
+    const startX = burgerSprite.x;
+    const startY = burgerSprite.y;
+    const startScale = burgerSprite.scaleX * 0.85;
+
+    // Burst-dissolve the burger
+    this.tweens.add({
+      targets: burgerSprite,
+      alpha: 0,
+      scale: burgerSprite.scaleX * 1.6,
+      duration: 220,
+      ease: "Quad.easeOut",
+    });
+
+    // Cow appears at the burger's position, popping in from zero scale
+    this.cowSprite = this.add.image(startX, startY, "cow");
+    this.cowSprite.setOrigin(0.5);
+    this.cowSprite.setScale(0);
+    this.cowSprite.setDepth(25);
+    this.sound.play("moo", { volume: 0.85 });
+
+    this.tweens.add({
+      targets: this.cowSprite,
+      scale: startScale,
+      angle: -9,
+      duration: 220,
+      ease: "Back.easeOut",
+      onComplete: () => {
+        if (!this.cowSprite) return;
+
+        const cowMax = Math.max(this.cowSprite.width, this.cowSprite.height);
+        const fillScale = (Math.max(width, height) * 3.4) / cowMax;
+
+        // Pre-impact rumble starts halfway through approach
+        this.time.delayedCall(300, () => this.cameras.main.shake(130, 0.009));
+
+        // Rush toward the camera
+        this.tweens.add({
+          targets: this.cowSprite,
+          x: width / 2,
+          y: height * 0.44,
+          scale: fillScale,
+          angle: 11,
+          duration: 600,
+          ease: "Expo.easeIn",
+          onComplete: () => {
+            if (!this.cowSprite) return;
+
+            // IMPACT — big shake + white flash + red blood tint
+            this.cameras.main.shake(380, 0.03);
+
+            const flash = this.add
+              .rectangle(0, 0, width, height, 0xffffff, 1)
+              .setOrigin(0, 0)
+              .setDepth(29);
+            this.tweens.add({
+              targets: flash,
+              alpha: 0,
+              duration: 300,
+              ease: "Quad.easeOut",
+              onComplete: () => flash.destroy(),
+            });
+
+            const redOverlay = this.add
+              .rectangle(0, 0, width, height, 0xaa0000, 0.42)
+              .setOrigin(0, 0)
+              .setDepth(27);
+            this.tweens.add({
+              targets: redOverlay,
+              alpha: 0,
+              duration: 950,
+              delay: 120,
+              ease: "Quad.easeOut",
+              onComplete: () => redOverlay.destroy(),
+            });
+
+            // Pixelated blood drips from the screen
+            this.spawnBloodParticles();
+
+            // Cow bounces on impact
+            this.tweens.add({
+              targets: this.cowSprite,
+              scale: fillScale * 0.87,
+              duration: 130,
+              yoyo: true,
+              ease: "Quad.easeOut",
+            });
+
+            // Fall off screen after a beat
+            this.time.delayedCall(400, () => {
+              if (!this.cowSprite) return;
+              const offY = height + this.cowSprite.displayHeight * 0.55;
+              this.tweens.add({
+                targets: this.cowSprite,
+                y: offY,
+                duration: 680,
+                ease: "Quad.easeIn",
+                onComplete: () => {
+                  this.cowSprite?.destroy();
+                  this.cowSprite = undefined;
+                  const highScore = this.updateSessionHighScore();
+                  this.showGameOverOverlay(highScore);
+                },
+              });
+            });
+          },
+        });
+      },
+    });
+  }
+
+  private spawnBloodParticles() {
+    const { width } = this.scale;
+
+    // Build a small pixelated blood-drop texture once; reuse on subsequent deaths
+    if (!this.textures.exists("blood-pixel")) {
+      const g = this.make.graphics({}, false);
+      g.fillStyle(0xdd0000, 1);
+      g.fillRect(0, 0, 8, 8);
+      g.fillStyle(0xff3333, 1);
+      g.fillRect(1, 1, 4, 3);
+      g.generateTexture("blood-pixel", 8, 8);
+      g.destroy();
+    }
+
+    // Initial impact splatter: mostly downward to avoid confetti-like spread.
+    const splatEmitter = this.add.particles(width / 2, 0, "blood-pixel", {
+      speedY: { min: 220, max: 640 },
+      speedX: { min: -width * 0.12, max: width * 0.12 },
+      scaleX: { min: 0.8, max: 2.2 },
+      scaleY: { min: 2.2, max: 7.5 },
+      alpha: { start: 1, end: 0.55 },
+      lifespan: { min: 2000, max: 4400 },
+      gravityY: 540,
+      tint: [0xdd0000, 0xaa0000, 0xff2222, 0x880000],
+      blendMode: Phaser.BlendModes.NORMAL,
+      emitting: false,
+    });
+    splatEmitter.setDepth(26);
+    splatEmitter.explode(120);
+    this.time.delayedCall(5200, () => splatEmitter.destroy());
+
+    // Continuous drips from the top edge to sell "blood on screen" effect.
+    this.bloodEmitter = this.add.particles(0, 0, "blood-pixel", {
+      x: { min: width * 0.04, max: width * 0.96 },
+      y: { min: -8, max: 14 },
+      speedY: { min: 160, max: 460 },
+      speedX: { min: -8, max: 8 },
+      scaleX: { min: 0.8, max: 2.4 },
+      scaleY: { min: 2.2, max: 8.5 },
+      alpha: { start: 1, end: 0.52 },
+      lifespan: { min: 3200, max: 6200 },
+      quantity: 6,
+      frequency: 20,
+      gravityY: 360,
+      tint: [0xdd0000, 0xaa0000, 0xff2222, 0x880000, 0xff4444],
+      blendMode: Phaser.BlendModes.NORMAL,
+    });
+    this.bloodEmitter.setDepth(26);
+
+    // Let drips run longer before stopping new particles.
+    this.time.delayedCall(1600, () => {
+      this.bloodEmitter?.stop();
+      this.time.delayedCall(7000, () => {
+        this.bloodEmitter?.destroy();
+        this.bloodEmitter = undefined;
+      });
+    });
   }
 
   private createBurgerFrames() {
