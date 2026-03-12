@@ -626,6 +626,8 @@ export default class GameScene extends Phaser.Scene {
   private showGameOverOverlay(highScore: number) {
     if (this.gameOverOverlay) return;
     const { width, height } = this.scale;
+    const isMobile = width < 520;
+    const uiScale = Phaser.Math.Clamp(width / 920, 0.72, 1);
 
     this.gameOverBackdrop = this.add
       .rectangle(0, 0, width, height, 0x0f1b2d, 0.62)
@@ -633,57 +635,74 @@ export default class GameScene extends Phaser.Scene {
       .setDepth(30);
 
     const panel = this.add
-      .rectangle(0, 0, Math.min(660, width * 0.9), Math.min(460, height * 0.82), 0x12233d, 0.92)
-      .setStrokeStyle(4, 0xffffff);
+      .rectangle(
+        0,
+        0,
+        Math.min(660, width * 0.9),
+        Math.min(460, Math.max(height * 0.82, 360)),
+        0x12233d,
+        0.92,
+      )
+      .setStrokeStyle(Math.max(2, Math.round(4 * uiScale)), 0xffffff);
     const panelHalfHeight = panel.height / 2;
+    const titleY = -138 * uiScale;
+    const scoreY = -42 * uiScale;
+    const highScoreY = 24 * uiScale;
+    const hintY = panelHalfHeight - Math.max(30, Math.round(42 * uiScale));
+    const restartY = hintY - Math.round(90 * uiScale);
+    const buttonWidth = Math.min(440, panel.width * 0.82);
+    const buttonHeight = Math.max(64, Math.round(86 * uiScale));
 
     const gameOverText = this.add
-      .text(0, -138, "GAME OVER", {
-        font: "900 64px Poppins",
+      .text(0, titleY, "GAME OVER", {
+        font: `900 ${Math.max(44, Math.round(64 * uiScale))}px Poppins`,
         color: "#ffd166",
         stroke: "#e6527a",
-        strokeThickness: 8,
+        strokeThickness: Math.max(4, Math.round(8 * uiScale)),
       })
       .setOrigin(0.5);
 
     const scoreText = this.add
-      .text(0, -42, `Score: ${this.score}`, {
-        font: "700 44px Poppins",
+      .text(0, scoreY, `Score: ${this.score}`, {
+        font: `700 ${Math.max(32, Math.round(44 * uiScale))}px Poppins`,
         color: "#ffffff",
         stroke: "#223355",
-        strokeThickness: 7,
+        strokeThickness: Math.max(4, Math.round(7 * uiScale)),
       })
       .setOrigin(0.5);
 
     const highScoreText = this.add
-      .text(0, 24, `High Score: ${highScore}`, {
-        font: "700 36px Poppins",
+      .text(0, highScoreY, `High Score: ${highScore}`, {
+        font: `700 ${Math.max(28, Math.round(36 * uiScale))}px Poppins`,
         color: "#7dffba",
         stroke: "#223355",
-        strokeThickness: 6,
+        strokeThickness: Math.max(3, Math.round(6 * uiScale)),
       })
       .setOrigin(0.5);
-
-    const hintY = panelHalfHeight - 42;
-    const restartY = hintY - 90;
 
     const restartButtonBg = this.add
-      .rectangle(0, restartY, 440, 86, 0x1f8f41)
-      .setStrokeStyle(4, 0xffffff);
+      .rectangle(0, restartY, buttonWidth, buttonHeight, 0x1f8f41)
+      .setStrokeStyle(Math.max(2, Math.round(4 * uiScale)), 0xffffff);
     const restartButtonHit = this.add
-      .rectangle(0, restartY, 440, 86, 0x000000, 0.001)
+      .rectangle(0, restartY, buttonWidth, buttonHeight, 0x000000, 0.001)
       .setInteractive({ useHandCursor: true });
     const restartLabel = this.add
-      .text(0, restartY, "Play Again", {
-        font: "900 36px Poppins",
+      .text(0, restartY, "Play", {
+        font: `900 ${Math.max(28, Math.round(36 * uiScale))}px Poppins`,
         color: "#ffffff",
       })
       .setOrigin(0.5);
 
+    const hintWrapWidth = Math.max(220, Math.min(panel.width - 44, width * 0.78));
     const hint = this.add
-      .text(0, hintY, "Click the button or press SPACE to play again", {
-        font: "700 22px Poppins",
+      .text(0, hintY, "Tap Play or press SPACE to restart", {
+        font: `700 ${isMobile ? 19 : 22}px Poppins`,
         color: "#ffffff",
+        align: "center",
+        wordWrap: {
+          width: hintWrapWidth,
+          useAdvancedWrap: true,
+        },
       })
       .setOrigin(0.5);
     this.tweens.add({
@@ -706,7 +725,7 @@ export default class GameScene extends Phaser.Scene {
     ]);
     this.gameOverOverlay.setDepth(31);
 
-    restartButtonHit.on("pointerover", () => restartButtonBg.setScale(1.05));
+    restartButtonHit.on("pointerover", () => restartButtonBg.setScale(isMobile ? 1.03 : 1.05));
     restartButtonHit.on("pointerout", () => restartButtonBg.setScale(1));
     restartButtonHit.on("pointerdown", this.restartFromGameOver, this);
     this.input.keyboard?.once("keydown-SPACE", this.restartFromGameOver, this);
